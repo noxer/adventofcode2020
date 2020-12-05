@@ -12,16 +12,16 @@ func main() {
 		fmt.Printf("Konnte die Boarding Pässe nicht einlesen: %s\n", err)
 	}
 
-	plane := [128][8]bool{}
+	plane := [8][128]bool{}
 
 	for _, bp := range bps {
-		plane[bp.Row][bp.Column] = true
+		plane[bp.Column][bp.Row] = true
 	}
 
 out:
-	for r, col := range plane[1 : len(plane)-1] {
-		for c, occupied := range col {
-			if !occupied && plane[r+2][c] && plane[r][c] {
+	for c, col := range plane {
+		for r, occupied := range col[1 : len(col)-1] {
+			if !occupied && plane[c][r+2] && plane[c][r] {
 				fmt.Printf("Unser Sitz ist: Reihe %d, Sitz %d\n", r+1, c)
 				id := BoardingPass{Row: r + 1, Column: c}.SeatID()
 				fmt.Printf("Unsere Sitz ID ist %d\n", id)
