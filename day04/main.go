@@ -123,10 +123,6 @@ func readPassports(name string) ([]Passport, error) {
 var passportSeparator = []byte("\n\n")
 
 func scanPassport(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	//if atEOF {
-	//	fmt.Println(strconv.Quote(string(data)))
-	//}
-
 	wasNewline := false
 	index := -1
 	for i, b := range data {
@@ -150,10 +146,6 @@ func scanPassport(data []byte, atEOF bool) (advance int, token []byte, err error
 	if index < 0 {
 		return 0, nil, nil
 	}
-
-	//	if atEOF {
-	//		fmt.Printf("Index: %d\n", index)
-	//	}
 
 	return index + 1, bytes.TrimSpace(data[:index]), nil
 }
