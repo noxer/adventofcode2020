@@ -22,7 +22,7 @@ func main() {
 	sum := 0
 
 	for _, expr := range exprs {
-		sum += expr.Eval()
+		sum += expr.AttemptSwap().Eval()
 	}
 
 	fmt.Printf("Ergebnis: %d\n", sum)
@@ -53,17 +53,64 @@ func (e *Expr) Eval() int {
 
 	case '*':
 		return e.Left.Eval() * e.Right.Eval()
+
+	case '(':
+		return e.Left.Eval()
 	}
 
 	panic("unknown operation " + string(e.Op))
 }
+
+// AttemptSwap ...
+func (e *Expr) AttemptSwap() *Expr {
+	if e.Left != nil {
+		e.Left = e.Left.AttemptSwap()
+	}
+	if e.Right != nil {
+		e.Right = e.Right.AttemptSwap()
+	}
+
+	if e.Op != '+' {
+		return e
+	}
+
+	if e.Left != nil && e.Left.Op == '*' {
+		newParent := e.Left
+		e.Left = newParent.Right
+		newParent.Right = e
+		return newParent
+	}
+
+	if e.Right != nil && e.Right.Op == '*' {
+		newParent := e.Right
+		e.Right = newParent.Left
+		newParent.Left = e
+		return newParent
+	}
+
+	return e
+}
+
+//       (+)
+//       / \
+//     (+)  3
+//     1 2
+
+//       (*)
+//       / \
+//      1  (+)
+//         2 3
 
 func (e *Expr) String() string {
 	if e.IsLeaf() {
 		return strconv.Itoa(e.Const)
 	}
 
-	return fmt.Sprintf("(%s %c %s)", e.Left, e.Op, e.Right)
+	if e.Op == '(' {
+		return fmt.Sprintf("(%s)", e.Left)
+	}
+
+	return fmt.Sprintf("{%s %c %s}", e.Left, e.Op, e.Right)
 }
 
 func parseString(line string) (*Expr, error) {
@@ -88,7 +135,7 @@ func parse(buf *bufio.Reader) (*Expr, error) {
 			return nil, errors.New("missing closing bracket")
 		}
 
-		return parseFull(leftExpr, buf)
+		return parseFull(&Expr{Op: '(', Left: leftExpr}, buf)
 	}
 
 	return nil, fmt.Errorf("unexpected character %c", left)
@@ -131,10 +178,11 @@ func parseExpr(left *Expr, buf *bufio.Reader) (*Expr, error) {
 	}
 
 	// this is an "("
-	expr.Right, err = parse(buf)
+	bracket, err := parse(buf)
 	if err != errClosingBracket {
 		return nil, errors.New("missing closing bracket")
 	}
+	expr.Right = &Expr{Op: '(', Left: bracket}
 
 	return expr, nil
 }
