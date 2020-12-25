@@ -1,0 +1,274 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+)
+
+func main() {
+	tiles, err := readTiles("input.txt")
+	if err != nil {
+		fmt.Printf("Fehler beim Einlesen der Bilder: %s\n", err)
+		os.Exit(1)
+	}
+
+	tileMap := make(map[int]Tile)
+	edgeMap := make(EdgeMap, 0)
+	for _, tile := range tiles {
+		tileMap[tile.ID] = tile
+
+		for _, edge := range tile.Edges() {
+			edgeMap.Insert(tile.ID, edge)
+		}
+	}
+
+	edgeCount := make(map[int]int)
+	for _, te := range edgeMap {
+		if len(te.TileIDs) > 1 {
+			for tileID := range te.TileIDs {
+				edgeCount[tileID]++
+			}
+
+			if len(te.TileIDs) > 2 {
+				fmt.Printf("Warnung: Mehrere Übereinstimmungen für %v\n", te.TileIDs)
+			}
+		}
+	}
+
+	corner := 0
+	prod := 1
+	for tileID, matching := range edgeCount {
+		if matching == 2 {
+			fmt.Printf("Ecke gefunden: %d\n", tileID)
+			prod *= tileID
+
+			corner = tileID
+		}
+	}
+
+	fmt.Printf("%v\n", edgeCount)
+
+	fmt.Printf("Lösung: %d\n", prod)
+
+	// task 2
+	completeMap := make(CompleteMap)
+
+	// find the top-left corner
+	cornerTile := tileMap[corner]
+	cornerEdges := cornerTile.Edges()
+
+	for edgeMap.FindMatching(cornerEdges[EdgeTop], corner) != -1 && edgeMap.FindMatching(cornerEdges[EdgeLeft], corner) != -1 {
+		cornerTile = cornerTile.RotateRight()
+		cornerEdges = cornerTile.Edges()
+	}
+}
+
+// Coord ...
+type Coord struct {
+	X, Y int
+}
+
+// CompleteMap ...
+type CompleteMap map[Coord]Tile
+
+// Set ...
+func (m CompleteMap) Set(x, y int, t Tile) {
+	m[Coord{X: x, Y: y}] = t
+}
+
+// Get ...
+func (m CompleteMap) Get(x, y int) Tile {
+	return m[Coord{X: x, Y: y}]
+}
+
+// EdgeMap ...
+type EdgeMap []*TileEdge
+
+// Insert ...
+func (m *EdgeMap) Insert(tileID int, edge Edge) {
+	for _, te := range *m {
+		if te.Edge.Equals(edge) != 0 {
+			te.TileIDs[tileID] = struct{}{}
+			return
+		}
+	}
+
+	*m = append(*m, &TileEdge{TileIDs: map[int]struct{}{tileID: struct{}{}}, Edge: edge})
+}
+
+// FindMatching ...
+func (m *EdgeMap) FindMatching(edge Edge, ignoreID int) int {
+	for _, te := range *m {
+		if te.Edge.Equals(edge) != 0 {
+			for tileID := range te.TileIDs {
+				if tileID != ignoreID {
+					return tileID
+				}
+			}
+
+			return -1
+		}
+	}
+
+	return -1
+}
+
+// TileEdge ...
+type TileEdge struct {
+	TileIDs map[int]struct{}
+	Edge    Edge
+}
+
+// Tile ...
+type Tile struct {
+	ID   int
+	Data [10][10]byte
+}
+
+// MirrorV ...
+func (t Tile) MirrorV() Tile {
+	for _, row := range t.Data {
+		invertRow(row[:])
+	}
+
+	return t
+}
+
+// MirrorH ...
+func (t Tile) MirrorH() Tile {
+	for i := 0; i < len(t.Data)/2; i++ {
+		t.Data[i], t.Data[len(t.Data)-i-1] = t.Data[len(t.Data)-i-1], t.Data[i]
+	}
+
+	return t
+}
+
+// RotateRight ...
+func (t Tile) RotateRight() Tile {
+	r := Tile{ID: t.ID}
+
+	N := 10
+	a := t.Data
+
+	// Traverse each cycle
+	for i := 0; i < N/2; i++ {
+		for j := i; j < N-i-1; j++ {
+
+			// Swap elements of each cycle
+			// in clockwise direction
+			temp := a[i][j]
+			a[i][j] = a[N-1-j][i]
+			a[N-1-j][i] = a[N-1-i][N-1-j]
+			a[N-1-i][N-1-j] = a[j][N-1-i]
+			a[j][N-1-i] = temp
+		}
+	}
+
+	r.Data = a
+	return r
+}
+
+//   012   012
+//
+// 0 123   741
+// 1 456   852
+// 2 789   963
+//
+
+func invertRow(row []byte) {
+	for i := 0; i < len(row)/2; i++ {
+		row[i], row[len(row)-i-1] = row[len(row)-i-1], row[i]
+	}
+}
+
+// Edge directions
+const (
+	EdgeTop = iota
+	EdgeBottom
+	EdgeLeft
+	EdgeRight
+)
+
+// Edges ...
+func (t Tile) Edges() [4]Edge {
+	var result [4]Edge
+	copy(result[0][:], t.Data[0][:])
+	copy(result[1][:], t.Data[9][:])
+
+	for i := 0; i < 10; i++ {
+		result[2][i] = t.Data[i][0]
+		result[3][i] = t.Data[i][9]
+	}
+
+	return result
+}
+
+// Edge ...
+type Edge [10]byte
+
+// Equals ...
+func (e Edge) Equals(o Edge) int {
+	for i, b := range e {
+		if b != o[i] {
+			return e.equalsInv(o)
+		}
+	}
+
+	return 1
+}
+
+func (e Edge) equalsInv(o Edge) int {
+	for i, b := range e {
+		if b != o[9-i] {
+			return 0
+		}
+	}
+
+	return 2
+}
+
+func readTiles(name string) ([]Tile, error) {
+	f, err := os.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	s := bufio.NewScanner(f)
+
+	var tiles []Tile
+	for s.Scan() {
+		t, err := readTile(s)
+		if err != nil {
+			return tiles, err
+		}
+
+		tiles = append(tiles, t)
+	}
+
+	return tiles, nil
+}
+
+func readTile(s *bufio.Scanner) (Tile, error) {
+	s.Scan()
+	label := strings.TrimSuffix(strings.TrimPrefix(s.Text(), "Tile "), ":")
+
+	id, err := strconv.Atoi(label)
+	if err != nil {
+		return Tile{}, err
+	}
+
+	t := Tile{
+		ID: id,
+	}
+
+	for i := range t.Data {
+		s.Scan()
+		copy(t.Data[i][:], s.Bytes())
+	}
+
+	return t, nil
+}
